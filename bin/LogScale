@@ -1,0 +1,43 @@
+#!/usr/bin/env python3
+import sys
+import csv
+from math import log10
+
+usage = """Usage: ./LogScale infile.csv -c col1,col2,... outfile.csv"""
+
+if len(sys.argv) < 2:
+    print(usage)
+    sys.exit(0)
+
+argc = 1
+inf = sys.argv[argc]
+argc += 1
+
+if sys.argv[argc] != '-c':
+    print("Write the arguments right man.")
+    sys.exit(1)
+
+argc += 1
+logSet = set(sys.argv[argc].split(","))
+print("Logset: {}".format(logSet))
+argc +=1
+
+dt = None
+with open(inf) as f:
+     rd = csv.DictReader(f)
+     dt = list(rd)
+
+def transformCol(val,col,logSet):
+    if val == ".": return val
+    if col in logSet:
+        return log10(int(float(val))+1)
+    return val
+
+nwDt = [{k:transformCol(e,k,logSet) for k,e in rw.items()} for rw in dt]
+
+outf = sys.argv[argc]
+with open(outf,'w') as f:
+    wr = csv.DictWriter(f,fieldnames=nwDt[0].keys())
+    wr.writeheader()
+    wr.writerows(nwDt)
+

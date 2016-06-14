@@ -1,0 +1,79 @@
+import sys
+import json
+import glob
+import csv
+from collections import Counter
+import datetime as dt
+
+from ElecTweet.TweetLoader import LoadTweets, LoadUsers
+from ElecTweet.Tools import GetCut
+from ElecTweet.Featurator import Featurator
+
+def features_batch(batch, ft):
+    print("Initializing feature extraction")
+    ft.initialize(batch)
+    print("Running features over tweets")
+    for i,tw in enumerate(batch):
+        try:
+            ft.tweet_features(tw)
+        except:
+            print("Error wit tweet: "+str(i))
+            raise
+    print("Finalizing features")
+    ft.set_state('end')
+    return ft.finalize()
+
+usage = """./CalculateFeatures tweetDir userDir outFile.csv [-m/-w/-d/-a]
+\t-w - Aggregate tweets by week
+\t-m - Aggregate tweets by month
+\t-d - Aggregate tweets by day
+\t-a - Aggregate all tweets together (default)"""
+
+if len(sys.argv) < 4:
+    print(usage)
+    sys.exit(1)
+
+period = 'all'
+if len(sys.argv) == 5:
+    periods = {'-w':'week','-m':'month','-d':'day','-a':'all'}
+    period = periods[sys.argv[4]]
+
+print("Period cuts are made on: "+period)
+
+print("Loading tweets...")
+twts = LoadTweets(sys.argv[1])
+print("Tweets loaded.")
+
+usrset, usrFiles = LoadUsers(sys.argv[2])
+print("Users are: "+str(usrset))
+
+outf = open(sys.argv[3],'w')
+wr = csv.writer(outf)
+
+res = {}
+count = 1
+keys = None
+while True:
+    print("Starting round "+str(count))
+    ft = Featurator(usrset)
+    print("Tweet cut for round "+str(count))
+    cutStart, cutEnd = GetCut(twts,period)
+    batch = twts[cutStart:cutEnd+1]
+    twts = twts[cutEnd+1:]
+    if len(batch) == 0 and len(twts) == 0: break
+    if len(batch) == 0: continue
+    bchRes = features_batch(batch, ft)
+    res[batch[0]['created_at']] = bchRes
+    if len(twts) == 0: 
+        keys = [key for key, msr in bchRes.items()]
+        print("Finished work")
+        break
+    count += 1
+
+wr.writerow(['period','user'] + keys)
+for period, measures in res.items():
+    for us in usrset:
+        outp = [period,us] + [msr[us] for key, msr in measures.items()]
+        wr.writerow(outp)
+
+outf.close()

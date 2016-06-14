@@ -1,0 +1,80 @@
+#!/usr/bin/env python
+import sys
+import json
+
+usage = """Usage: ./FindOldTweets outputPrefix [-w wordFile1,wordFile2,...] [-mid maxID] [-c credfile.json]"""
+
+if len(sys.argv) < 2:
+    print(usage)
+    sys.exit(0)
+
+argc = 1
+outf = sys.argv[argc]
+argc += 1
+
+words = ['@HillaryClinton','@BernieSanders']
+
+if len(sys.argv) > argc and sys.argv[argc] == '-w':
+    wordFiles = sys.argv[argc+1].split(',')
+    words = [x.strip() for f in wordFiles for ln in open(f) for x in ln.split(",")]
+    argc += 2
+
+print(words)
+
+maxId = None
+if len(sys.argv) > argc and sys.argv[argc] == '-mid':
+    maxId = sys.argv[argc+1]
+    argc += 2
+
+credFile = 'data/credentials.json'
+if len(sys.argv) > argc and sys.argv[argc] == '-c':
+    credFile = sys.argv[argc+1]
+
+crd = json.load(open(credFile))
+
+import tweepy
+from tweepy import OAuthHandler
+from tweepy import Stream
+
+auth = OAuthHandler(crd['consumer_key'], crd['consumer_secret'])
+auth.set_access_token(crd['access_token'], crd['access_token_secret'])
+
+query = '" OR "'.join(words)
+query = '"'+query+'"'
+print(query)
+
+api = tweepy.API(auth,wait_on_rate_limit=True)
+
+cursor = tweepy.Cursor(api.search,q=query,max_id=maxId)
+
+
+wantedAttributes = ['text','created_at','geo','place','favorite_count','coordinates','timestamp_ms',
+                                 'entities','retweet_count','id_str','in_reply_to_screen_name','quoted_status','lang',
+                                 'source','user']
+outpList = []
+count = 0
+
+try:
+    for tweet in cursor.items():
+        tweet = tweet._json
+        #tweet = json.loads(tweet)
+        tweet = {attr:tweet[attr] for attr in wantedAttributes if attr in tweet}
+        outpList.append(tweet)
+        count += 1
+        #print(str(tweet))
+        if count % 1000 == 0:
+            print("Got "+str(count)+" tweets.")
+            if len(outpList) == 10000:
+                of = open(outf+str(count)+'.json','w')
+                json.dump(outpList,of)
+                of.close()
+                outpList = []
+except:
+    print("Had a failure. Finishing with what we had.")
+
+if len(outpList) > 0: 
+    of = open(outf+str(count)+'.json','w')
+    json.dump(outpList,of)
+    of.close()
+
+print("Incredibly, we're done!")

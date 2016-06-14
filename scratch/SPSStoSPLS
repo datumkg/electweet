@@ -1,0 +1,27 @@
+#!/usr/bin/env python3
+import sys
+import csv
+
+usage = "SPSStoSPLS infile.csv outfile.csv"
+
+if len(sys.argv) < 3:
+   print(usage)
+   sys.exit(0)
+
+dt = None
+with open(sys.argv[1]) as f:
+     rd = csv.DictReader(f)
+     dt = list(rd)
+
+def transformElem(e):
+   if e == ".": return -99
+   return e
+
+nwDt = [{k:transformElem(e) for k,e in rw.items()} for rw in dt]
+
+with open(sys.argv[2],'w') as f:
+    wr = csv.DictWriter(f,fieldnames=nwDt[0].keys())
+    wr.writeheader()
+    wr.writerows(nwDt)
+
+
